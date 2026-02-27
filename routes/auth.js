@@ -202,6 +202,16 @@ router.post('/login', [
     res.status(500).json({ success: false, message: 'Server error during login' });
   }
 });
+router.get('/all-users',async(req,res)=>{
+  try{
+    const allusers = await User.find()
+    console.log('this is all users',allusers)
+    return res.status(200).json({message:"All users fetch from db",allusers})
+  }catch(error){
+    console.log('error',error)
+    return res.status(500).json({message:"Internal server error",error})
+  }
+})
 
 // @route   GET /api/auth/me
 router.get('/me', protect, async (req, res) => {

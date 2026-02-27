@@ -1,10 +1,10 @@
-// 📁 backend/middleware/cronjob.js (FIXED)
+// 📁 backend/middleware/cronjob.js (EVERY 1 MINUTE)
 const cron = require('node-cron');
 const User = require('../models/UserSchema.js');
 const { sendTestMessagesToAll, testTwilioConnection } = require('./testMessage.js');
 
 const startCronJobs = async () => {
-  console.log('⏰ Starting Cron Jobs - TEST MODE (Every 10 seconds)...');
+  console.log('⏰ Starting Cron Jobs - EVERY 1 MINUTE...');
 
   // Test Twilio connection first
   const twilioOk = await testTwilioConnection();
@@ -16,11 +16,11 @@ const startCronJobs = async () => {
   }
 
   // ============================================
-  // TEST MODE - Har 10 seconds mein message bhejo
-  // Cron: */10 * * * * *  (every 10 seconds)
+  // EVERY 1 MINUTE - Message bhejo
+  // Cron: * * * * *  (every minute)
   // ============================================
-  cron.schedule('*/10 * * * * *', async () => {
-    console.log('📨 Running TEST message job...', new Date().toLocaleTimeString());
+  cron.schedule('* * * * *', async () => {
+    console.log('📨 Running MINUTE-LY message job...', new Date().toLocaleTimeString());
     
     try {
       if (!twilioOk) {
@@ -31,28 +31,29 @@ const startCronJobs = async () => {
       const result = await sendTestMessagesToAll();
       
       if (result.success) {
-        console.log(`✅ Test job completed: ${result.sent}/${result.total} messages sent`);
+        console.log(`✅ Minute job completed: ${result.sent}/${result.total} messages sent at ${new Date().toLocaleTimeString()}`);
       } else {
-        console.log('⚠️ Test job completed with issues');
+        console.log('⚠️ Minute job completed with issues');
       }
     } catch (error) {
-      console.error('❌ Test cron job error:', error.message);
+      console.error('❌ Minute cron job error:', error.message);
     }
   }, {
     timezone: 'Asia/Kolkata'
   });
 
   // ============================================
-  // OPTIONAL: Har 30 seconds mein log
+  // OPTIONAL: Har 30 seconds mein heartbeat (for monitoring)
   // ============================================
   cron.schedule('*/30 * * * * *', () => {
     console.log('⏱️  System heartbeat...', new Date().toLocaleTimeString());
   });
 
-  console.log('✅ Test Cron Jobs Scheduled:');
-  console.log('   📱 Test Message Job → Every 10 seconds');
+  console.log('✅ Cron Jobs Scheduled:');
+  console.log('   📱 Message Job → Every 1 minute (at 0 seconds)');
   console.log('   💓 Heartbeat → Every 30 seconds');
   console.log('   📝 Current Time:', new Date().toLocaleTimeString());
+  console.log('   📅 Next message job will run at:', new Date(Date.now() + 60000).toLocaleTimeString());
 };
 
 module.exports = { startCronJobs };
