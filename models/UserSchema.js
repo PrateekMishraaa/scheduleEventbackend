@@ -1,3 +1,4 @@
+// 📁 backend/models/UserSchema.js (UPDATED)
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -25,61 +26,74 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: [true, 'WhatsApp phone number is required'],
-    match: [/^\+[1-9]\d{9,14}$/, 'Please provide a valid phone number with country code (e.g. +919876543210)']
+    match: [/^\+[1-9]\d{9,14}$/, 'Valid phone with country code required (e.g. +919876543210)']
   },
-  institutionName: {
+  isPhoneVerified: {
+    type: Boolean,
+    default: false
+  },
+
+  // ✅ SCHOOL INFORMATION - YEH FIELDS ADD KARO
+  schoolName: {
     type: String,
     required: [true, 'School/College name is required'],
     trim: true
   },
-  institutionType: {
-    type: String,
-    enum: ['school', 'college'],
-    required: [true, 'Institution type is required']
-  },
-  classYear: {
+  className: {
     type: String,
     required: [true, 'Class/Year is required'],
     trim: true
   },
-  city: {
-    type: String,
-    trim: true
+  
+  // ✅ Institution Reference (optional - agar join code based system ho to)
+  institution: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Institution'
   },
+  joinCode: {
+    type: String,
+    uppercase: true
+  },
+
+  city: { type: String, trim: true },
+  
   role: {
     type: String,
     enum: ['student', 'admin'],
     default: 'student'
   },
-  isActive: {
-    type: Boolean,
-    default: true
-  },
-  whatsappOptIn: {
-    type: Boolean,
-    default: true
-  },
+  isActive: { type: Boolean, default: true },
+  whatsappOptIn: { type: Boolean, default: true },
+  
+  // Message Stats
   messagesSent: {
     weekly: { type: Number, default: 0 },
     monthly: { type: Number, default: 0 },
-    yearly: { type: Number, default: 0 }
+    yearly: { type: Number, default: 0 },
+    custom: { type: Number, default: 0 }
   },
-  lastMessageSent: {
-    type: Date
-  }
-}, {
-  timestamps: true
-});
+  totalMessages: { type: Number, default: 0 },
+  lastMessageSent: { type: Date },
+  
+  // Login tracking
+  lastLogin: { type: Date },
+  loginCount: { type: Number, default: 0 }
+}, { timestamps: true });
 
 // Hash password before saving
 userSchema.pre('save', async function() {
-  if (!this.isModified('password')) return ;
-  const salt = await bcrypt.genSalt(12);
-  this.password = await bcrypt.hash(this.password, salt);
-  return
+  if (!this.isModified('password')) return 
+  // next();
+  
+  try {
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+    // next();
+  } catch (error) {
+    // next(error);
+  }
 });
 
-// Compare password method
 userSchema.methods.comparePassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };

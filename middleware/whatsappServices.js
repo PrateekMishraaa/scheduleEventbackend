@@ -1,5 +1,7 @@
+// 📁 middleware/whatsappServices.js (COMPLETE FIXED VERSION)
 const twilio = require('twilio');
 const { MessageLog } = require('../models/ActivitySchema.js');
+const User = require('../models/UserSchema.js');
 
 let client;
 
@@ -48,7 +50,19 @@ Stay motivated and keep learning! 🚀
 
 _Reply STOP to unsubscribe_`;
 
-  await sendWhatsAppMessage(user.phone, message);
+  const response = await sendWhatsAppMessage(user.phone, message);
+  
+  // Log welcome message
+  await MessageLog.create({
+    userId: user._id,
+    phone: user.phone,
+    message,
+    type: 'welcome',
+    status: 'sent',
+    twilioSid: response.sid
+  });
+
+  return response;
 };
 
 // Weekly messages templates
@@ -160,7 +174,7 @@ With love,
 _Student Activity Platform Team_ 🎓`;
 
 // Send weekly messages to all students
-const sendWeeklyMessages = async (users) => {
+const sendWeeklyMessages = async (users, activityId = null) => {
   const results = { success: 0, failed: 0 };
   const msgIndex = Math.floor(Math.random() * weeklyMessages.length);
 
@@ -171,8 +185,10 @@ const sendWeeklyMessages = async (users) => {
       const message = weeklyMessages[msgIndex](user.fullName);
       const response = await sendWhatsAppMessage(user.phone, message);
       
+      // FIXED: Added activityId
       await MessageLog.create({
         userId: user._id,
+        activityId, // NOW INCLUDED
         phone: user.phone,
         message,
         type: 'weekly',
@@ -180,8 +196,12 @@ const sendWeeklyMessages = async (users) => {
         twilioSid: response.sid
       });
 
-      await user.updateOne({
-        $inc: { 'messagesSent.weekly': 1 },
+      // FIXED: Correct increment syntax
+      await User.findByIdAndUpdate(user._id, {
+        $inc: { 
+          'messagesSent.weekly': 1,
+          'totalMessages': 1 
+        },
         lastMessageSent: new Date()
       });
 
@@ -191,6 +211,7 @@ const sendWeeklyMessages = async (users) => {
       
       await MessageLog.create({
         userId: user._id,
+        activityId, // NOW INCLUDED
         phone: user.phone,
         type: 'weekly',
         status: 'failed',
@@ -205,7 +226,7 @@ const sendWeeklyMessages = async (users) => {
 };
 
 // Send monthly messages to all students
-const sendMonthlyMessages = async (users) => {
+const sendMonthlyMessages = async (users, activityId = null) => {
   const results = { success: 0, failed: 0 };
   const month = new Date().toLocaleString('default', { month: 'long' });
   const msgIndex = Math.floor(Math.random() * monthlyMessages.length);
@@ -219,6 +240,7 @@ const sendMonthlyMessages = async (users) => {
 
       await MessageLog.create({
         userId: user._id,
+        activityId, // NOW INCLUDED
         phone: user.phone,
         message,
         type: 'monthly',
@@ -226,8 +248,11 @@ const sendMonthlyMessages = async (users) => {
         twilioSid: response.sid
       });
 
-      await user.updateOne({
-        $inc: { 'messagesSent.monthly': 1 },
+      await User.findByIdAndUpdate(user._id, {
+        $inc: { 
+          'messagesSent.monthly': 1,
+          'totalMessages': 1 
+        },
         lastMessageSent: new Date()
       });
 
@@ -235,6 +260,7 @@ const sendMonthlyMessages = async (users) => {
     } catch (error) {
       await MessageLog.create({
         userId: user._id,
+        activityId, // NOW INCLUDED
         phone: user.phone,
         type: 'monthly',
         status: 'failed',
@@ -248,7 +274,7 @@ const sendMonthlyMessages = async (users) => {
 };
 
 // Send yearly message to all students
-const sendYearlyMessages = async (users) => {
+const sendYearlyMessages = async (users, activityId = null) => {
   const results = { success: 0, failed: 0 };
   const year = new Date().getFullYear();
 
@@ -261,6 +287,7 @@ const sendYearlyMessages = async (users) => {
 
       await MessageLog.create({
         userId: user._id,
+        activityId, // NOW INCLUDED
         phone: user.phone,
         message,
         type: 'yearly',
@@ -268,8 +295,11 @@ const sendYearlyMessages = async (users) => {
         twilioSid: response.sid
       });
 
-      await user.updateOne({
-        $inc: { 'messagesSent.yearly': 1 },
+      await User.findByIdAndUpdate(user._id, {
+        $inc: { 
+          'messagesSent.yearly': 1,
+          'totalMessages': 1 
+        },
         lastMessageSent: new Date()
       });
 
@@ -277,6 +307,7 @@ const sendYearlyMessages = async (users) => {
     } catch (error) {
       await MessageLog.create({
         userId: user._id,
+        activityId, // NOW INCLUDED
         phone: user.phone,
         type: 'yearly',
         status: 'failed',
@@ -290,16 +321,17 @@ const sendYearlyMessages = async (users) => {
 };
 
 // Send custom message to specific users
-const sendCustomMessage = async (users, message) => {
+const sendCustomMessage = async (users, message, activityId = null) => {
   const results = { success: 0, failed: 0 };
 
   for (const user of users) {
     try {
-      const personalizedMsg = message.replace('{name}', user.fullName);
+      const personalizedMsg = message.replace(/{name}/g, user.fullName);
       const response = await sendWhatsAppMessage(user.phone, personalizedMsg);
 
       await MessageLog.create({
         userId: user._id,
+        activityId,
         phone: user.phone,
         message: personalizedMsg,
         type: 'custom',
@@ -307,10 +339,19 @@ const sendCustomMessage = async (users, message) => {
         twilioSid: response.sid
       });
 
+      await User.findByIdAndUpdate(user._id, {
+        $inc: { 
+          'messagesSent.custom': 1,
+          'totalMessages': 1 
+        },
+        lastMessageSent: new Date()
+      });
+
       results.success++;
     } catch (error) {
       await MessageLog.create({
         userId: user._id,
+        activityId,
         phone: user.phone,
         type: 'custom',
         status: 'failed',
@@ -323,11 +364,20 @@ const sendCustomMessage = async (users, message) => {
   return results;
 };
 
+// Verify phone number with OTP
+const sendPhoneOTP = async (phone, otp) => {
+  const message = `🔐 *Your Student Activity Platform verification code is: ${otp}*\n\nThis code will expire in 10 minutes. Do not share this with anyone.`;
+  
+  const response = await sendWhatsAppMessage(phone, message);
+  return response;
+};
+
 module.exports = {
   sendWelcomeMessage,
   sendWeeklyMessages,
   sendMonthlyMessages,
   sendYearlyMessages,
   sendCustomMessage,
-  sendWhatsAppMessage
+  sendWhatsAppMessage,
+  sendPhoneOTP
 };
