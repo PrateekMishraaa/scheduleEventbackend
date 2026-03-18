@@ -1,4 +1,4 @@
-// 📁 middleware/whatsappServices.js (COMPLETE FIXED VERSION)
+// 📁 middleware/whatsappServices.js (COMPLETE UPDATED VERSION)
 const twilio = require('twilio');
 const { MessageLog } = require('../models/ActivitySchema.js');
 const User = require('../models/UserSchema.js');
@@ -18,27 +18,162 @@ const getTwilioClient = () => {
 
 // Send a WhatsApp message
 const sendWhatsAppMessage = async (toPhone, message) => {
-  const twilioClient = getTwilioClient();
-  const from = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886';
+  try {
+    const twilioClient = getTwilioClient();
+    const from = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886';
 
-  const response = await twilioClient.messages.create({
-    from,
-    to: `whatsapp:${toPhone}`,
-    body: message
-  });
+    // Format phone number correctly
+    let formattedPhone = toPhone;
+    if (!formattedPhone.startsWith('whatsapp:')) {
+      formattedPhone = `whatsapp:${formattedPhone}`;
+    }
 
-  return response;
+    console.log(`📤 Sending WhatsApp to ${formattedPhone}`);
+    
+    const response = await twilioClient.messages.create({
+      from,
+      to: formattedPhone,
+      body: message
+    });
+
+    console.log(`✅ WhatsApp sent. SID: ${response.sid}`);
+    return response;
+  } catch (error) {
+    console.error('❌ Twilio error:', error.message);
+    throw error;
+  }
 };
 
-// Welcome message on registration
+// ==================== REGISTRATION WELCOME MESSAGE ====================
+const getRegistrationWelcomeMessage = (user) => {
+  const date = new Date();
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  const currentMonth = monthNames[date.getMonth()];
+  const nextMonth = monthNames[date.getMonth() + 1] || monthNames[0];
+  
+  // Get day suffix (st, nd, rd, th)
+  const getDaySuffix = (day) => {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
+  
+  const today = date.getDate();
+  const year = date.getFullYear();
+  
+  return `🎉 *Welcome to Student Activity Platform!* 🎉
+
+Namaste *${user.fullName}*! 🙏
+
+━━━━━━━━━━━━━━━━━━━━━
+✅ *Registration Successful*
+📅 *Date:* ${currentMonth} ${today}${getDaySuffix(today)}, ${year}
+━━━━━━━━━━━━━━━━━━━━━
+
+*Your Profile Details:*
+━━━━━━━━━━━━━━━━━━━━━
+🏫 *School/College:* ${user.schoolName || 'Not specified'}
+📚 *Class/Year:* ${user.className || 'Not specified'}
+📱 *WhatsApp:* ${user.phone}
+📍 *City:* ${user.city || 'Not specified'}
+━━━━━━━━━━━━━━━━━━━━━
+
+*What happens next?*
+
+📅 *Weekly Messages:* Every Monday at 9:00 AM
+   → Motivational quotes & study tips
+
+🗓️ *Monthly Messages:* 1st of every month at 10:00 AM
+   → Progress reports & goal setting
+   → Next message: ${nextMonth} 1st
+
+🎊 *Yearly Messages:* January 1st
+   → Annual summary & new year wishes
+
+*Your first monthly message will arrive on ${nextMonth} 1st!*
+
+━━━━━━━━━━━━━━━━━━━━━
+*Quick Tips:*
+✨ Keep your WhatsApp notifications ON
+✨ Reply STOP anytime to unsubscribe
+✨ Update your profile in the dashboard
+━━━━━━━━━━━━━━━━━━━━━
+
+Stay motivated and keep learning! 🚀
+
+_Student Activity Platform Team_ 🌟`;
+};
+
+const sendRegistrationWelcomeMessage = async (user) => {
+  try {
+    // Check if user opted in
+    if (!user.whatsappOptIn) {
+      console.log(`📱 User ${user.phone} opted out - no welcome message`);
+      return null;
+    }
+
+    const message = getRegistrationWelcomeMessage(user);
+    const response = await sendWhatsAppMessage(user.phone, message);
+    
+    // Log the welcome message
+    await MessageLog.create({
+      userId: user._id,
+      phone: user.phone,
+      message,
+      type: 'welcome',
+      status: 'sent',
+      twilioSid: response.sid
+    });
+
+    // Update user stats
+    await User.findByIdAndUpdate(user._id, {
+      $inc: { 
+        'messagesSent.custom': 1,
+        'totalMessages': 1 
+      },
+      lastMessageSent: new Date()
+    });
+
+    console.log(`✅ Welcome message sent to ${user.phone} (${user.fullName})`);
+    return response;
+    
+  } catch (error) {
+    console.error(`❌ Failed to send welcome message to ${user.phone}:`, error.message);
+    
+    // Log failure
+    try {
+      await MessageLog.create({
+        userId: user._id,
+        phone: user.phone,
+        type: 'welcome',
+        status: 'failed',
+        errorMessage: error.message
+      });
+    } catch (logError) {
+      console.error('❌ Failed to log error:', logError.message);
+    }
+    
+    throw error;
+  }
+};
+
+// ==================== EXISTING FUNCTIONS (with fixes) ====================
+
+// Welcome message on registration (keeping your existing function but fixing variable names)
 const sendWelcomeMessage = async (user) => {
+  // Fix: Use schoolName and className instead of institutionName and classYear
   const message = `🎉 *Welcome to Student Activity Platform!*
 
 Hello *${user.fullName}*! 👋
 
 You have successfully registered. Here's your profile:
-🏫 *Institution:* ${user.institutionName}
-📚 *Class/Year:* ${user.classYear}
+🏫 *School/College:* ${user.schoolName || 'Not specified'}
+📚 *Class/Year:* ${user.className || 'Not specified'}
 📱 *WhatsApp:* ${user.phone}
 
 You will receive:
@@ -60,6 +195,15 @@ _Reply STOP to unsubscribe_`;
     type: 'welcome',
     status: 'sent',
     twilioSid: response.sid
+  });
+
+  // Update user stats
+  await User.findByIdAndUpdate(user._id, {
+    $inc: { 
+      'messagesSent.custom': 1,
+      'totalMessages': 1 
+    },
+    lastMessageSent: new Date()
   });
 
   return response;
@@ -185,10 +329,9 @@ const sendWeeklyMessages = async (users, activityId = null) => {
       const message = weeklyMessages[msgIndex](user.fullName);
       const response = await sendWhatsAppMessage(user.phone, message);
       
-      // FIXED: Added activityId
       await MessageLog.create({
         userId: user._id,
-        activityId, // NOW INCLUDED
+        activityId,
         phone: user.phone,
         message,
         type: 'weekly',
@@ -196,7 +339,6 @@ const sendWeeklyMessages = async (users, activityId = null) => {
         twilioSid: response.sid
       });
 
-      // FIXED: Correct increment syntax
       await User.findByIdAndUpdate(user._id, {
         $inc: { 
           'messagesSent.weekly': 1,
@@ -206,12 +348,16 @@ const sendWeeklyMessages = async (users, activityId = null) => {
       });
 
       results.success++;
+      
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
     } catch (error) {
       console.error(`Failed to send to ${user.phone}:`, error.message);
       
       await MessageLog.create({
         userId: user._id,
-        activityId, // NOW INCLUDED
+        activityId,
         phone: user.phone,
         type: 'weekly',
         status: 'failed',
@@ -240,7 +386,7 @@ const sendMonthlyMessages = async (users, activityId = null) => {
 
       await MessageLog.create({
         userId: user._id,
-        activityId, // NOW INCLUDED
+        activityId,
         phone: user.phone,
         message,
         type: 'monthly',
@@ -257,10 +403,16 @@ const sendMonthlyMessages = async (users, activityId = null) => {
       });
 
       results.success++;
+      
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
     } catch (error) {
+      console.error(`Failed to send monthly to ${user.phone}:`, error.message);
+      
       await MessageLog.create({
         userId: user._id,
-        activityId, // NOW INCLUDED
+        activityId,
         phone: user.phone,
         type: 'monthly',
         status: 'failed',
@@ -271,6 +423,50 @@ const sendMonthlyMessages = async (users, activityId = null) => {
   }
 
   return results;
+};
+
+// Send monthly message to a single user (for testing or manual sending)
+const sendMonthlyMessageToUser = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    if (!user.whatsappOptIn || !user.isActive) {
+      throw new Error('User not opted in or inactive');
+    }
+    
+    const month = new Date().toLocaleString('default', { month: 'long' });
+    const msgIndex = Math.floor(Math.random() * monthlyMessages.length);
+    const message = monthlyMessages[msgIndex](user.fullName, month);
+    
+    const response = await sendWhatsAppMessage(user.phone, message);
+    
+    await MessageLog.create({
+      userId: user._id,
+      phone: user.phone,
+      message,
+      type: 'monthly',
+      status: 'sent',
+      twilioSid: response.sid
+    });
+
+    await User.findByIdAndUpdate(user._id, {
+      $inc: { 
+        'messagesSent.monthly': 1,
+        'totalMessages': 1 
+      },
+      lastMessageSent: new Date()
+    });
+    
+    return { success: true, user: user.fullName, sid: response.sid };
+    
+  } catch (error) {
+    console.error('❌ Error sending monthly message:', error);
+    return { success: false, error: error.message };
+  }
 };
 
 // Send yearly message to all students
@@ -287,7 +483,7 @@ const sendYearlyMessages = async (users, activityId = null) => {
 
       await MessageLog.create({
         userId: user._id,
-        activityId, // NOW INCLUDED
+        activityId,
         phone: user.phone,
         message,
         type: 'yearly',
@@ -304,10 +500,15 @@ const sendYearlyMessages = async (users, activityId = null) => {
       });
 
       results.success++;
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
     } catch (error) {
+      console.error(`Failed to send yearly to ${user.phone}:`, error.message);
+      
       await MessageLog.create({
         userId: user._id,
-        activityId, // NOW INCLUDED
+        activityId,
         phone: user.phone,
         type: 'yearly',
         status: 'failed',
@@ -348,7 +549,12 @@ const sendCustomMessage = async (users, message, activityId = null) => {
       });
 
       results.success++;
+      
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
     } catch (error) {
+      console.error(`Failed to send custom to ${user.phone}:`, error.message);
+      
       await MessageLog.create({
         userId: user._id,
         activityId,
@@ -372,12 +578,32 @@ const sendPhoneOTP = async (phone, otp) => {
   return response;
 };
 
+// Test function to send a monthly message to a specific phone number
+const testMonthlyMessage = async (phone, name = 'Test User') => {
+  try {
+    const month = new Date().toLocaleString('default', { month: 'long' });
+    const msgIndex = Math.floor(Math.random() * monthlyMessages.length);
+    const message = monthlyMessages[msgIndex](name, month);
+    
+    const response = await sendWhatsAppMessage(phone, message);
+    console.log(`✅ Test monthly message sent to ${phone}`);
+    return response;
+  } catch (error) {
+    console.error('❌ Test monthly message failed:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   sendWelcomeMessage,
+  sendRegistrationWelcomeMessage,
+  getRegistrationWelcomeMessage,
   sendWeeklyMessages,
   sendMonthlyMessages,
+  sendMonthlyMessageToUser,
   sendYearlyMessages,
   sendCustomMessage,
   sendWhatsAppMessage,
-  sendPhoneOTP
+  sendPhoneOTP,
+  testMonthlyMessage
 };

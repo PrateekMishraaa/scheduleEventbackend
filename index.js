@@ -13,15 +13,27 @@ const adminRoutes = require('./routes/admin.js');
 const institutionRoutes = require('./routes/institution.js');
 const testRoutes = require('./routes/testRoutes.js');
 
+const figlet = require("figlet")
+
+figlet("Baba Pandit", function (err, data) {
+  if (err) {
+    console.log("Something went wrong...");
+    console.dir(err);
+    return;
+  }
+  console.log(data);
+});
+
 // Import middleware
 const { startCronJobs } = require('./middleware/cronjob.js');
+const { startMonthlyCron } = require('./middleware/monthlyCron.js');
 
 const app = express();
 
 // ✅ FIXED: CORS configuration for both local and production
 const allowedOrigins = [
   'http://localhost:3000',
-  'http://localhost:5173',
+  // 'http://localhost:5173',
   'http://localhost:5000',
   'https://scheduleevent.vercel.app', // Your Vercel frontend URL
   'https://www.scheduleevent.vercel.app',
@@ -45,6 +57,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
+app.use(startMonthlyCron)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

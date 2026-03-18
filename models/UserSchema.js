@@ -1,4 +1,4 @@
-// 📁 backend/models/UserSchema.js (UPDATED)
+// 📁 backend/models/UserSchema.js (FIXED)
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema({
     default: false
   },
 
-  // ✅ SCHOOL INFORMATION - YEH FIELDS ADD KARO
+  // SCHOOL INFORMATION
   schoolName: {
     type: String,
     required: [true, 'School/College name is required'],
@@ -45,7 +45,7 @@ const userSchema = new mongoose.Schema({
     trim: true
   },
   
-  // ✅ Institution Reference (optional - agar join code based system ho to)
+  // Institution Reference
   institution: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Institution'
@@ -65,7 +65,7 @@ const userSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   whatsappOptIn: { type: Boolean, default: true },
   
-  // Message Stats
+  // Message Stats - FIXED: Using correct schema structure
   messagesSent: {
     weekly: { type: Number, default: 0 },
     monthly: { type: Number, default: 0 },
